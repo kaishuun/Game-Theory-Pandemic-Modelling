@@ -44,3 +44,9 @@ data <- data.frame(S,I,R) %>% mutate(step = 1:n())
 data
 ```
 
+```{r}
+data %>% ggplot(aes(x = step)) + geom_line(aes(y = S, color = "green")) + geom_line(aes(y = I, color = "yellow")) + geom_line(aes(y = R, color = "red")) + xlim(0,200)
+```
+
+
+
