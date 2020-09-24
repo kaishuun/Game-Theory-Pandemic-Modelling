@@ -1,0 +1,51 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+#setting up variables
+
+S <-  c(5000000)
+I <-  c(20)
+R <-  c(0)
+
+N = S[1] + I[1] + R[1]
+
+Pspread <-  0.4
+Pcontact <-  0.6
+Precover <-  0.1
+```
+
+```{r}
+
+#Staying Home A Lot
+#Public Work Pcontact = 0.8
+steps = 5000
+
+for( i in 2:steps){
+
+  S <- c(S, S[i-1] - (Pcontact * Pspread * I[i-1]/N * S[i-1]))
+  I <- c(I, I[i-1] + (Pcontact * Pspread * I[i-1]/N * S[i-1]) - (Precover * I[i-1]))
+  R <- c(R, R[i-1] + Precover * I[i-1])
+  
+  
+}
+
+data <- data.frame(S,I,R) %>% mutate(step = 1:n())
+data
+```
+
+```{r}
+data %>% ggplot(aes(x = step)) + geom_line(aes(y = S, color = "blue")) + geom_line(aes(y = I, color = "yellow")) + 
+  geom_line(aes(y = R, color = "red")) + xlim(0,200)
+```
+
+```{r}
+
+```
+
