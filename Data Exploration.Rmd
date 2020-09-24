@@ -1,0 +1,86 @@
+---
+title: "Data Exploration"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(kernlab)
+library(MASS)
+```
+
+
+We import the case data for BC residents, and calculate the number of new cases every day
+
+```{r}
+bcdat <- read.csv("C:/Users/ehniv/Desktop/RA/BCCDC_COVID19_Dashboard_Case_Details.csv", stringsAsFactors = FALSE) %>% mutate(Reported_Date = as.Date(Reported_Date))
+
+bcdat <- bcdat %>% mutate(cases = 1) %>% group_by(Reported_Date) %>% mutate(new_cases = sum(cases))
+bcdat <- bcdat %>% filter(HA != "Out of Canada")
+bcdat
+```
+
+Here is the visualization of new cases per day since March
+```{r}
+bcdat %>% ggplot(aes(x = Reported_Date, y = new_cases, color = "red")) + geom_line()
+
+```
+
+
+Since there is two clear distributions, we now split it off into the data sets wave 1 and wave 2.
+```{r}
+wave1 <- bcdat %>% filter(month(Reported_Date) < 6)
+wave2 <- bcdat %>% filter(month(Reported_Date) >= 6)
+
+
+ggplot(data = wave1, aes(x = Reported_Date, y = new_cases, color = "blue")) + geom_line() + geom_line(data = wave2, aes(color = "red")) + geom_smooth(data = bcdat, aes(x = Reported_Date, y = new_cases, color = "green")) + theme(legend.position = "none") + ylim(0,200)
+```
+
+
+Seperating the data into the two waves, the data resembles a normal distribution and we now use the gaussian process to fit the data for both waves
+
+wave1 - Linear 
+
+```{r}
+linear1 <- lm(new_cases ~ Reported_Date, data = wave1)
+plot(new_cases ~ Reported_Date, data = wave1)
+abline(linear1)
+```
+
+
+wave1 - gaussian process
+```{r}
+gp1 <- gausspr(new_cases ~ Reported_Date, data = wave1)
+
+x_val <- seq(as.Date("2020/03/01"),as.Date("2020/09/30"), by = "day")
+predict_gp1 <- predict(gp1, data.frame("Reported_Date" = x_val))
+
+
+pairs_gp1 <- data.frame("Date" = x_val, "Predict"  = predict_gp1)
+pairs_gp1
+
+
+ggplot(data = wave1, aes(x = Reported_Date, y = new_cases)) + geom_point() + geom_line(data = pairs_gp1, aes(x = Date, y = Predict))
+
+```
+
+
+wave2
+```{r}
+
+gp1 <- gausspr(new_cases ~ Reported_Date, data = wave2)
+
+x_val <- seq(as.Date("2020/06/01"),as.Date("2020/12/30"), by = "day")
+predict_gp2 <- predict(gp1, data.frame("Reported_Date" = x_val))
+
+
+pairs_gp2 <- data.frame("Date" = x_val, "Predict"  = predict_gp2)
+
+
+ggplot(data = wave2, aes(x = Reported_Date, y = new_cases)) + geom_point() + geom_line(data = pairs_gp2, aes(x = Date, y = Predict))
+```
