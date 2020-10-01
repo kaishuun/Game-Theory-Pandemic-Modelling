@@ -114,6 +114,7 @@ for(i in 1:steps){
   # The to meet is sum(infected not isolated)/sum(not isolating)
   # Look at People that are not isolating and calculating what the probability of them meeting is
   
+  #maybe change to N
   Pmeet <- length(mod[(mod[,"Step"] == 2 & mod[,"Isolation"] == 0 ) , "Step"])/ length(mod[mod[,"Isolation"] == 0, "Isolation"])
   
   mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , "Step"] <- mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , "Step"]  +  rbern(length(mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , "Step"]), Pcontact * Pspread * Pmeet)
