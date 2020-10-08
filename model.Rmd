@@ -94,6 +94,8 @@ head(mod)
 
 #sets up data frame
 SIRdf <- data.frame("Step" = 0, "S" = S, "I" = I, "R" = I)
+
+
 ```
 
 
@@ -104,21 +106,32 @@ steps = 500
 
 
 for(i in 1:steps){
+  
   #increase the day count for Isolation Counter + leaves isolation after 14 days
   mod[mod[,"Isolation"] == 1, "Isolation Counter"] = mod[mod[,"Isolation"] == 1, "Isolation Counter"] + 1
-  
   mod[mod[,"Isolation Counter"] >= 14, "Isolation"] = 0
   mod[mod[,"Isolation Counter"] >= 14, "Isolation Counter"] = 0
   
   # S to I
+  
+  #sets up the transition from S to I  
   # The to meet is sum(infected not isolated)/sum(not isolating)
   # Look at People that are not isolating and calculating what the probability of them meeting is
+  Pmeet <- length(mod[(mod[,"Step"] == 2 & mod[,"Isolation"] == 0 ) , "Step"])/N
+  transition <- rbern(length(mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , "Step"]), Pcontact * Pspread * Pmeet)
   
-  #maybe change to N
-  Pmeet <- length(mod[(mod[,"Step"] == 2 & mod[,"Isolation"] == 0 ) , "Step"])/ length(mod[mod[,"Isolation"] == 0, "Isolation"])
   
-  mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , "Step"] <- mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , "Step"]  +  rbern(length(mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , "Step"]), Pcontact * Pspread * Pmeet)
   
+  #infected goes into isolation at a set prob Piso.S
+  iso.transition <- as.matrix(transition)
+  Piso.S <- 0.1
+  
+  iso.transition[iso.transition[,1] == 1,] <- rbern(length(iso.transition[iso.transition[,1] == 1,]), Piso.S)
+  
+  
+  #updater function sends to iso then updates
+  newI <- mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , "Step"]  +  transition
+  mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , c("Step", "Isolation")] <- cbind(newI,iso.transition)
   
   
   # I to R
@@ -126,6 +139,10 @@ for(i in 1:steps){
   
   mod[mod[,"Step"] == 2, "Step"] <- mod[mod[,"Step"] == 2, "Step"]  +  
     rbern(length(mod[mod[,"Step"] == 2, "Step"]), Precover)
+  
+  
+  # New S goes into isolation
+  
   
   #updates data frame
   newS <- sum(mod[,"Step"] == 1)
@@ -139,7 +156,32 @@ SIRdf
 ```
 
 ```{r}
-SIRdf %>% ggplot(aes(x = Step)) + geom_line(aes(y = S, colour = "green")) + geom_line(aes(y = I, colour = "yellow")) + geom_line(aes(y = R, colour = "red")) + xlim(0,250)
+SIRdf %>% ggplot(aes(x = Step)) + geom_line(aes(y = S, colour = "Suseptible")) + geom_line(aes(y = I, colour = "Infected")) + geom_line(aes(y = R, colour = "Recovered")) + xlim(0,250)
+```
+
+
+```{r}
+
+## Testing out prisoner's dilemma
+actions <- c("isolate", "go outside")
+
+risk <- function(action){
+  if(action == actions[1]){
+    return(0);
+  }
+  else if(action == actions[2]){
+    return(2)
+  }
+}
+
+utility <- function(x, action){
+  return(x)
+}
+
+#each person has a gaussian min utility
+#calculate the risk
+
+
 ```
 
 
