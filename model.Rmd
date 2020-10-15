@@ -19,7 +19,6 @@ R <-  c(0)
 N = S[1] + I[1] + R[1]
 
 Pspread <-  0.4
-Pcontact <-  0.6
 Precover <-  0.1
 ```
 
@@ -64,11 +63,12 @@ N = S + I + R
 
 Pspread <-  0.4
 Pcontact <-  0.6
-Precover <-  0.1
+Precover <-  0.07
+minUtil <- 20
 
 #sets up the matrix 
-mod <- matrix(NA, nrow = N, ncol = 3)
-colnames(mod) <- c("Step","Isolation", "Isolation Counter")
+mod <- matrix(NA, nrow = N, ncol = 4)
+colnames(mod) <- c("Step","Isolation", "Isolation Counter", "Utility")
 
 #Step: S = 1, I = 2, R = 3
 #Isolate: 1 = True, 0 = False
@@ -90,22 +90,33 @@ mod[mod[,"Step"] == 3,"Isolation"] <- 0
 
 mod[,"Isolation Counter"] <- 0
 
+#sets up utility
+mod[,"Utility"] <- rnorm(n = N,mean = 50,sd = 50/3)
+
+
+
+#display test
 head(mod)
 
 #sets up data frame
-SIRdf <- data.frame("Step" = 0, "S" = S, "I" = I, "R" = I)
-
-
+SIRdf <- data.frame("Step" = 0, "S" = S, "I" = I, "R" = R)
+SIRdf
 ```
 
 
 
 ```{r}
 #transitions
-steps = 500
+steps = 200
+
+#utility update function
+f <- function(x) rnorm(n = 1, mean = x, sd = 2)
 
 
 for(i in 1:steps){
+  
+  #Utility is updated for all stages
+  mod[,"Utility"] <- mapply(mod[,"Utility"], FUN = f)
   
   #increase the day count for Isolation Counter + leaves isolation after 14 days
   mod[mod[,"Isolation"] == 1, "Isolation Counter"] = mod[mod[,"Isolation"] == 1, "Isolation Counter"] + 1
@@ -114,40 +125,39 @@ for(i in 1:steps){
   
   # S to I
   
-  #sets up the transition from S to I  
-  # The to meet is sum(infected not isolated)/sum(not isolating)
+  
+  #infected goes into isolation when their utility function goes below 3sd
+  mod[mod[,"Step"] == 1 & mod[,"Isolation"] == 0 & mod[,"Utility"] < 50 - 3 * 50/3, "Isolation"] <- 1
+  
+
+    
+  #Transition from S to I 
+  # The to meet is sum(infected not isolated + utility > 50/3*2)/sum(not isolating + utility > 20)
   # Look at People that are not isolating and calculating what the probability of them meeting is
-  Pmeet <- length(mod[(mod[,"Step"] == 2 & mod[,"Isolation"] == 0 ) , "Step"])/N
-  transition <- rbern(length(mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , "Step"]), Pcontact * Pspread * Pmeet)
   
+  Pmeet <- length(mod[(mod[,"Step"] == 2 & mod[,"Isolation"] == 0 & mod[,"Utility"] >= minUtil) , "Step"])/
+    nrow(mod[mod[,"Utility"] > minUtil & mod[,"Isolation"] == 0,])
+            
+  transition <- rbern(length(mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 & mod[,"Utility"] >= minUtil) , "Step"]), Pspread * Pmeet)
   
-  
-  #infected goes into isolation at a set prob Piso.S
-  iso.transition <- as.matrix(transition)
-  Piso.S <- 0.1
-  
-  iso.transition[iso.transition[,1] == 1,] <- rbern(length(iso.transition[iso.transition[,1] == 1,]), Piso.S)
-  
-  
-  #updater function sends to iso then updates
-  newI <- mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , "Step"]  +  transition
-  mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 ) , c("Step", "Isolation")] <- cbind(newI,iso.transition)
-  
+  mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 & mod[,"Utility"] >= minUtil) , "Step"] <- mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 & mod[,"Utility"] >= minUtil) , "Step"]  +  transition
   
   # I to R
-  # this is a stationary probability
+  # Stationary Transition rate Precover
   
   mod[mod[,"Step"] == 2, "Step"] <- mod[mod[,"Step"] == 2, "Step"]  +  
     rbern(length(mod[mod[,"Step"] == 2, "Step"]), Precover)
   
+  #Sends a proportion of Infected to Isolation (Utility < 1 sd)
+  mod[mod[,"Step"] == 2 & mod[,"Utility"] < 50 - 50/3, c("Isolation","Isolation Counter")] <- c(1,1)
   
-  # New S goes into isolation
+  
   
   
   #updates data frame
-  newS <- sum(mod[,"Step"] == 1)
-  newI <- sum(mod[,"Step"] == 2)
-  newR <- sum(mod[,"Step"] == 3)
+  newS <- nrow(mod[mod[,"Step"] == 1,])
+  newI <- nrow(mod[mod[,"Step"] == 2,])
+  newR <- nrow(mod[mod[,"Step"] == 3,])
   SIRdf <- rbind(SIRdf,c(i,newS,newI,newR))
   
 }
@@ -159,30 +169,15 @@ SIRdf
 SIRdf %>% ggplot(aes(x = Step)) + geom_line(aes(y = S, colour = "Suseptible")) + geom_line(aes(y = I, colour = "Infected")) + geom_line(aes(y = R, colour = "Recovered")) + xlim(0,250)
 ```
 
-
 ```{r}
+head(mod)
 
-## Testing out prisoner's dilemma
-actions <- c("isolate", "go outside")
-
-risk <- function(action){
-  if(action == actions[1]){
-    return(0);
-  }
-  else if(action == actions[2]){
-    return(2)
-  }
-}
-
-utility <- function(x, action){
-  return(x)
-}
-
-#each person has a gaussian min utility
-#calculate the risk
-
-
+mod[mod[,"Step"] == 2, "Step"] + rbern(length(mod[mod[,"Step"] == 2, "Step"]), Precover)
 ```
+
+
+
+
 
 
 
