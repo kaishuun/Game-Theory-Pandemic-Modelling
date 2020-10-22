@@ -29,6 +29,7 @@ Precover <-  0.1
 #if you're not infected you go around as bout
 #
 #
+
 steps = 5000
 
 for( i in 2:steps){
@@ -49,26 +50,36 @@ data %>% ggplot(aes(x = step)) + geom_line(aes(y = S, color = "green")) + geom_l
 ```
 
 
-
+# Stepwise Model (with socialability)
 
 ```{r}
-#Stepwise Model
+### Parameters
 
 #init population and probabilities
-S <-  50000
+S <-  499980
 I <-  20
 R <-  0
+#proportion of S and I isolating at initial
+S.isolate <- 0.05
+I.isolate <- 0.01
+
+#beginning params
+Pspread <-  0.6
+Pcontact <-  0.2
+Precover <-  0.05
+
+#proportion in isolation (eg 10% of infected goes into isolation each round)
+S.new.iso <- 0.005
+I.new.iso <- 0.05
+
 
 N = S + I + R
+```
 
-Pspread <-  0.4
-Pcontact <-  0.6
-Precover <-  0.07
-minUtil <- 20
-
+```{r}
 #sets up the matrix 
-mod <- matrix(NA, nrow = N, ncol = 4)
-colnames(mod) <- c("Step","Isolation", "Isolation Counter", "Utility")
+mod <- matrix(NA, nrow = N, ncol = 3)
+colnames(mod) <- c("Step","Isolation", "Isolation Counter")
 
 #Step: S = 1, I = 2, R = 3
 #Isolate: 1 = True, 0 = False
@@ -82,16 +93,14 @@ if(S + I + 1 <= S + I + R){
 }
 
 #sets up isolation
-# 0.05 of S isolate
-# 0.1 of I isolate
-mod[mod[,"Step"] == 1,"Isolation"] <- rbern(nrow(mod[mod[,"Step"] == 1,]), 0.01)
-mod[mod[,"Step"] == 2,"Isolation"] <- rbern(nrow(mod[mod[,"Step"] == 2,]), 0.1)
+# S.isolate in isolation
+# I.isolate in isolation
+mod[mod[,"Step"] == 1,"Isolation"] <- rbern(nrow(mod[mod[,"Step"] == 1,]), S.isolate)
+mod[mod[,"Step"] == 2,"Isolation"] <- rbern(nrow(mod[mod[,"Step"] == 2,]), I.isolate)
 mod[mod[,"Step"] == 3,"Isolation"] <- 0
 
 mod[,"Isolation Counter"] <- 0
 
-#sets up utility
-mod[,"Utility"] <- rnorm(n = N,mean = 50,sd = 50/3)
 
 
 
@@ -109,14 +118,9 @@ SIRdf
 #transitions
 steps = 200
 
-#utility update function
-f <- function(x) rnorm(n = 1, mean = x, sd = 2)
-
 
 for(i in 1:steps){
   
-  #Utility is updated for all stages
-  mod[,"Utility"] <- mapply(mod[,"Utility"], FUN = f)
   
   #increase the day count for Isolation Counter + leaves isolation after 14 days
   mod[mod[,"Isolation"] == 1, "Isolation Counter"] = mod[mod[,"Isolation"] == 1, "Isolation Counter"] + 1
@@ -124,40 +128,49 @@ for(i in 1:steps){
   mod[mod[,"Isolation Counter"] >= 14, "Isolation Counter"] = 0
   
   # S to I
-  
-  
-  #infected goes into isolation when their utility function goes below 3sd
-  mod[mod[,"Step"] == 1 & mod[,"Isolation"] == 0 & mod[,"Utility"] < 50 - 3 * 50/3, "Isolation"] <- 1
-  
 
-    
+  #sends a proportion of S to isolation
+  candidate.isolation <- which(mod[,"Step"] == 1 & mod[,"Isolation"] == 0)
+  S.iso.transition <- rbern(length(candidate.isolation), S.new.iso)
+  mod[candidate.isolation,c("Isolation","Isolation Counter")] <- cbind(S.iso.transition,S.iso.transition)
+  
+  
   #Transition from S to I 
-  # The to meet is sum(infected not isolated + utility > 50/3*2)/sum(not isolating + utility > 20)
+  # The to meet is sum(infected not isolated)/sum(not isolating)
   # Look at People that are not isolating and calculating what the probability of them meeting is
   
-  Pmeet <- length(mod[(mod[,"Step"] == 2 & mod[,"Isolation"] == 0 & mod[,"Utility"] >= minUtil) , "Step"])/
-    nrow(mod[mod[,"Utility"] > minUtil & mod[,"Isolation"] == 0,])
-            
-  transition <- rbern(length(mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 & mod[,"Utility"] >= minUtil) , "Step"]), Pspread * Pmeet)
   
-  mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 & mod[,"Utility"] >= minUtil) , "Step"] <- mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0 & mod[,"Utility"] >= minUtil) , "Step"]  +  transition
+  Pmeet <- length(mod[(mod[,"Step"] == 2 & mod[,"Isolation"] == 0) , "Step"])/
+    nrow(mod[ mod[,"Isolation"] == 0,])
+            
+  transition <- rbern(length(mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0) , "Step"]), Pspread * Pmeet)
+  
+  mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0) , "Step"] <- mod[(mod[,"Step"] == 1 & mod[,"Isolation"] == 0) , "Step"]  +  transition
+  
+  
   
   # I to R
-  # Stationary Transition rate Precover
-  
-  mod[mod[,"Step"] == 2, "Step"] <- mod[mod[,"Step"] == 2, "Step"]  +  
-    rbern(length(mod[mod[,"Step"] == 2, "Step"]), Precover)
   
   #Sends a proportion of Infected to Isolation (Utility < 1 sd)
-  mod[mod[,"Step"] == 2 & mod[,"Utility"] < 50 - 50/3, c("Isolation","Isolation Counter")] <- c(1,1)
   
+  I.iso.transition <- rbern(length(mod[mod[,"Step"] == 2 & mod[,"Isolation"] == 0, "Isolation"]), I.new.iso)
+  mod[mod[,"Step"] == 2 & mod[,"Isolation"] == 0, c("Isolation","Isolation Counter")] <- cbind(I.iso.transition,I.iso.transition)
+  
+  
+  # Stationary Transition rate Precover
+  mod[mod[,"Step"] == 2, "Step"] <- mod[mod[,"Step"] == 2, "Step"]  +  rbern(length(mod[mod[,"Step"] == 2, "Step"]), Precover)
+  
+  
+  #R
+  #everyone that is recovered goes out of isolation
+  mod[mod[,"Step"] == 3, c("Isolation","Isolation Counter")] <- c(0,0)
   
   
   
   #updates data frame
-  newS <- nrow(mod[mod[,"Step"] == 1,])
-  newI <- nrow(mod[mod[,"Step"] == 2,])
-  newR <- nrow(mod[mod[,"Step"] == 3,])
+  newS <- length(mod[mod[,"Step"] == 1,"Isolation"])
+  newI <- length(mod[mod[,"Step"] == 2,"Isolation"])
+  newR <- length(mod[mod[,"Step"] == 3,"Isolation"])
   SIRdf <- rbind(SIRdf,c(i,newS,newI,newR))
   
 }
@@ -172,7 +185,7 @@ SIRdf %>% ggplot(aes(x = Step)) + geom_line(aes(y = S, colour = "Suseptible")) +
 ```{r}
 head(mod)
 
-mod[mod[,"Step"] == 2, "Step"] + rbern(length(mod[mod[,"Step"] == 2, "Step"]), Precover)
+
 ```
 
 
