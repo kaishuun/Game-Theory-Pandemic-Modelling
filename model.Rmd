@@ -20,6 +20,7 @@ N = S[1] + I[1] + R[1]
 
 Pspread <-  0.4
 Precover <-  0.1
+Pcontact <-  0.2
 ```
 
 ```{r}
@@ -64,9 +65,8 @@ S.isolate <- 0.05
 I.isolate <- 0.01
 
 #beginning params
-Pspread <-  0.6
-Pcontact <-  0.2
-Precover <-  0.05
+Pspread <-  0.4
+Precover <-  0.1
 
 #proportion in isolation (eg 10% of infected goes into isolation each round)
 S.new.iso <- 0.005
@@ -74,7 +74,20 @@ I.new.iso <- 0.05
 
 
 N = S + I + R
+
+
+#sigmoid centered at 0.3 and rapid increase (S isolation Rate)
+sigmoid.S <- function(x){
+  1/(1+exp(-20*(x-0.3)))
+}
+
+#sigmoid centered at 2 and rapid increase
+sigmoid.I <- function(x){
+  1/(1+exp(-10*(x-0.2)))
+}
+
 ```
+
 
 ```{r}
 #sets up the matrix 
@@ -128,10 +141,13 @@ for(i in 1:steps){
   mod[mod[,"Isolation Counter"] >= 14, "Isolation Counter"] = 0
   
   # S to I
+  
+  #proportion of people who are infected and not isolated / not isolating
+  Infected <- length(mod[mod[,"Step"] == 2 & mod[,"Isolation"] == 0,"Step"])/nrow(mod[mod[,"Isolation"] == 0,])
 
   #sends a proportion of S to isolation
   candidate.isolation <- which(mod[,"Step"] == 1 & mod[,"Isolation"] == 0)
-  S.iso.transition <- rbern(length(candidate.isolation), S.new.iso)
+  S.iso.transition <- rbern(length(candidate.isolation), sigmoid.S(Infected))
   mod[candidate.isolation,c("Isolation","Isolation Counter")] <- cbind(S.iso.transition,S.iso.transition)
   
   
@@ -151,9 +167,9 @@ for(i in 1:steps){
   
   # I to R
   
-  #Sends a proportion of Infected to Isolation (Utility < 1 sd)
+  #Sends a proportion of Infected to Isolation
   
-  I.iso.transition <- rbern(length(mod[mod[,"Step"] == 2 & mod[,"Isolation"] == 0, "Isolation"]), I.new.iso)
+  I.iso.transition <- rbern(length(mod[mod[,"Step"] == 2 & mod[,"Isolation"] == 0, "Isolation"]), sigmoid.I(Infected))
   mod[mod[,"Step"] == 2 & mod[,"Isolation"] == 0, c("Isolation","Isolation Counter")] <- cbind(I.iso.transition,I.iso.transition)
   
   
@@ -179,14 +195,12 @@ SIRdf
 ```
 
 ```{r}
-SIRdf %>% ggplot(aes(x = Step)) + geom_line(aes(y = S, colour = "Suseptible")) + geom_line(aes(y = I, colour = "Infected")) + geom_line(aes(y = R, colour = "Recovered")) + xlim(0,250)
-```
-
-```{r}
-head(mod)
+SIRdf %>% ggplot(aes(x = Step)) + geom_line(aes(y = S, colour = "Suseptible")) + geom_line(aes(y = I, colour = "Infected")) + geom_line(aes(y = R, colour = "Recovered")) + xlim(0,200)
 
 
 ```
+
+
 
 
 
